@@ -22,3 +22,5 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+google_api_key.txt
