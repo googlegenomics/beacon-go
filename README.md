@@ -32,4 +32,10 @@ In order to setup and deploy this application, you will need:
 
 This application uses the [Application Default Credentials](https://developers.google.com/identity/protocols/application-default-credentials).  That means that, by default, it will have access to all data within the project in which it is deployed.
 
+Remember that you have cloned the application to your project.  You have your own instance of the application, which means:
+
+- Only this instance of the application has access to the data in your project (other people's instances will not have access).
+- The only access exposed is the [Beacon API](http://ga4gh.org/#/beacon) (people can't use this application to explore your data deeper than the [Beacon API](http://ga4gh.org/#/beacon) allows).
+- This instance only has access to data in your project (not other people's projects).
+
 It is also possible to grant the application access to data within other projects.  To accomplish this, add the "App Engine Service Account" of the project in which the application is deployed (found under the "Permissions" section in the [Google Developers Console](https://console.developers.google.com)) as a member of the project that contains the data.
