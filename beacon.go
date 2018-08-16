@@ -54,12 +54,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
-	query := fmt.Sprintf(`SELECT count(v.reference_name) as count
-												FROM %s as v
-												WHERE reference_name='%s'
-	  											AND v.start <= %d AND %d < v.end
-	 	 											AND reference_bases='%s'
-												LIMIT 1`,
+	query := fmt.Sprintf(`
+		SELECT count(v.reference_name) as count
+		FROM %s as v
+		WHERE reference_name='%s'
+			AND v.start <= %d AND %d < v.end
+	 	 	AND reference_bases='%s'
+		LIMIT 1`,
 		fmt.Sprintf("`%s`", config.table),
 		refName,
 		coord,
