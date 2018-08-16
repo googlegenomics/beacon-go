@@ -17,10 +17,12 @@
 package beacon
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 
 	"cloud.google.com/go/bigquery"
@@ -33,8 +35,8 @@ type beaconConfig struct {
 }
 
 var config = beaconConfig{
-	projectID: "project-id",
-	table:     "genomics-public-data.platinum_genomes.variants",
+	projectID: os.Getenv("GOOGLE_CLOUD_PROJECT"),
+	table:     os.Getenv("TABLE"),
 }
 
 func init() {
@@ -44,13 +46,37 @@ func init() {
 func handler(w http.ResponseWriter, r *http.Request) {
 	refName, allele, coord, err := parseInput(r)
 	if err != nil {
-		http.Error(w, "Failed parsing parameters", http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Failed parsing parameters: %v", err), http.StatusBadRequest)
+		return
 	}
 
 	ctx := appengine.NewContext(r)
+	exists, err := exists(ctx, refName, allele, coord)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed searching for genome: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	type beaconResponse struct {
+		XMLName struct{} `xml:"BEACONResponse"`
+		Exists  bool     `xml:"exists"`
+	}
+	var resp beaconResponse
+	resp.Exists = exists
+
+	w.Header().Set("Content-Type", "application/xml")
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	if err := enc.Encode(resp); err != nil {
+		http.Error(w, fmt.Sprintf("Failed writing response: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+func exists(ctx context.Context, refName string, allele string, coord int64) (bool, error) {
 	bqclient, err := bigquery.NewClient(ctx, config.projectID)
 	if err != nil {
-		http.Error(w, "Failed to access data", http.StatusInternalServerError)
+		return false, fmt.Errorf("Failed to access data: %v", err)
 	}
 
 	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
@@ -70,7 +96,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	it, err := q.Read(ctx)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed querying data: %v", err), http.StatusInternalServerError)
+		return false, fmt.Errorf("Failed querying data: %v", err)
 	}
 
 	type Result struct {
@@ -78,22 +104,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	var result Result
 	if err := it.Next(&result); err != nil {
-		http.Error(w, fmt.Sprintf("Failed reading result: %v", err), http.StatusInternalServerError)
+		return false, fmt.Errorf("Failed reading result: %v", err)
 	}
-
-	type beaconResponse struct {
-		XMLName struct{} `xml:"BEACONResponse"`
-		Exists  bool     `xml:"exists"`
-	}
-	var resp beaconResponse
-	resp.Exists = result.Count > 0
-
-	w.Header().Set("Content-Type", "application/xml")
-	enc := xml.NewEncoder(w)
-	enc.Indent("", "  ")
-	if err := enc.Encode(resp); err != nil {
-		http.Error(w, "Failed writing response", http.StatusInternalServerError)
-	}
+	return result.Count > 0, nil
 }
 
 func parseInput(r *http.Request) (string, string, int64, error) {

@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#application: beacon-go
-#version: 1
 runtime: go
 api_version: go1
 
 handlers:
 - url: /.*
   script: _go_app
+
+env_variables:
+  GOOGLE_CLOUD_PROJECT: project-id
+  TABLE: genomics-public-data.platinum_genomes.variants

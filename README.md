@@ -20,9 +20,9 @@ In order to setup and deploy this application, you will need:
 - Clone this repo.
   - `git clone git@github.com:googlegenomics/beacon-go.git`
 - Edit the configuration.
-  - In `beacon.go`, edit the values of `projectId` and `table` to reference your data.
+  - In `app.yaml`, edit the values of `GOOGLE_CLOUD_PROJECT` and `TABLE` to reference your data.
 - Deploy.
-  - `goapp deploy <your project>`
+  - `gcloud app deploy <your project>`
 - Query your new Beacon.
   - e.g. `http://<your project>.appspot.com/?chromosome=chr17&coordinate=41196407&allele=A`
   - Note that the `chromosome` parameter might look like `chr17` or just plain `17` depending on the reference used.
