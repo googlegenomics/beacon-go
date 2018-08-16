@@ -44,6 +44,14 @@ func init() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	if config.projectID == "" {
+		http.Error(w, "Mandatory variable GOOGLE_CLOUD_PROJECT not set", http.StatusInternalServerError)
+		return
+	}
+	if config.table == "" {
+		http.Error(w, "Mandatory variable TABLE not set", http.StatusInternalServerError)
+		return
+	}
 	refName, allele, coord, err := parseInput(r)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed parsing parameters: %v", err), http.StatusBadRequest)
