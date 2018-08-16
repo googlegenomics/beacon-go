@@ -19,108 +19,94 @@ package beacon
 import (
 	"encoding/xml"
 	"errors"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/genomics/v1"
-	"google.golang.org/appengine"
+	"fmt"
 	"net/http"
 	"strconv"
+
+	"cloud.google.com/go/bigquery"
+	"google.golang.org/appengine"
 )
 
 type beaconConfig struct {
-	variantSetIds []string
+	projectID string
+	table     string
 }
 
 var config = beaconConfig{
-	variantSetIds: []string{"3049512673186936334"},
+	projectID: "project-id",
+	table:     "genomics-public-data.platinum_genomes.variants",
 }
 
 func init() {
 	http.HandleFunc("/", handler)
 }
 
-func requestToSearch(r *http.Request) (*genomics.SearchVariantsRequest, string, error) {
-	allele := r.FormValue("allele")
-	search := &genomics.SearchVariantsRequest{
-		ReferenceName: r.FormValue("chromosome"),
-		VariantSetIds: config.variantSetIds,
+func handler(w http.ResponseWriter, r *http.Request) {
+	refName, allele, coord, err := parseInput(r)
+	if err != nil {
+		http.Error(w, "Failed parsing parameters", http.StatusBadRequest)
 	}
 
-	coord, err := strconv.ParseInt(r.FormValue("coordinate"), 10, 64)
+	ctx := appengine.NewContext(r)
+	bqclient, err := bigquery.NewClient(ctx, config.projectID)
 	if err != nil {
-		return nil, "", err
+		http.Error(w, "Failed to access data", http.StatusInternalServerError)
 	}
 
 	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
-	search.Start = coord
-	search.End = search.Start + 1
+	query := fmt.Sprintf(`SELECT count(v.reference_name) as count
+												FROM %s as v
+												WHERE reference_name='%s'
+	  											AND v.start <= %d AND %d < v.end
+	 	 											AND reference_bases='%s'
+												LIMIT 1`,
+		fmt.Sprintf("`%s`", config.table),
+		refName,
+		coord,
+		coord+1,
+		allele)
+	q := bqclient.Query(query)
 
-	if search.ReferenceName == "" {
-		return nil, "", errors.New("missing reference name")
-	}
-	if allele == "" {
-		return nil, "", errors.New("missing allele")
-	}
-
-	return search, allele, nil
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	c := appengine.NewContext(r)
-	search, allele, err := requestToSearch(r)
+	it, err := q.Read(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		http.Error(w, fmt.Sprintf("Failed querying data: %v", err), http.StatusInternalServerError)
 	}
 
-	client, err := google.DefaultClient(c, genomics.GenomicsReadonlyScope)
-	if err != nil {
-		http.Error(w, "Invalid server configuration", http.StatusInternalServerError)
+	type Result struct {
+		Count int
 	}
-	genomicsService, err := genomics.New(client)
-	if err != nil {
-		http.Error(w, "Invalid server configuration", http.StatusInternalServerError)
+	var result Result
+	if err := it.Next(&result); err != nil {
+		http.Error(w, fmt.Sprintf("Failed reading result: %v", err), http.StatusInternalServerError)
 	}
-	variantsService := genomics.NewVariantsService(genomicsService)
 
 	type beaconResponse struct {
 		XMLName struct{} `xml:"BEACONResponse"`
 		Exists  bool     `xml:"exists"`
 	}
 	var resp beaconResponse
-
-	for {
-		searchResponse, err := variantsService.Search(search).Do()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		for _, variant := range searchResponse.Variants {
-			if search.Start != variant.Start {
-				continue
-			}
-			if allele == variant.ReferenceBases {
-				resp.Exists = true
-			} else {
-				for _, base := range variant.AlternateBases {
-					if base == allele {
-						resp.Exists = true
-						break
-					}
-				}
-			}
-		}
-
-		if resp.Exists || searchResponse.NextPageToken == "" {
-			break
-		}
-		search.PageToken = searchResponse.NextPageToken
-	}
+	resp.Exists = result.Count > 0
 
 	w.Header().Set("Content-Type", "application/xml")
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
-	if err = enc.Encode(resp); err != nil {
+	if err := enc.Encode(resp); err != nil {
 		http.Error(w, "Failed writing response", http.StatusInternalServerError)
 	}
+}
+
+func parseInput(r *http.Request) (string, string, int64, error) {
+	refName := r.FormValue("chromosome")
+	if refName == "" {
+		return "", "", 0, errors.New("chromosome name is required")
+	}
+	allele := r.FormValue("allele")
+	if refName == "" {
+		return "", "", 0, errors.New("allele is required")
+	}
+	coord, err := strconv.ParseInt(r.FormValue("coordinate"), 10, 64)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("parsing coordinate: %v", err)
+	}
+	return refName, allele, coord, nil
 }

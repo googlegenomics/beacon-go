@@ -20,7 +20,7 @@ In order to setup and deploy this application, you will need:
 - Clone this repo.
   - `git clone git@github.com:googlegenomics/beacon-go.git`
 - Edit the configuration.
-  - In `beacon.go`, edit the value of `variantSetIds` to reference your data.
+  - In `beacon.go`, edit the values of `projectId` and `table` to reference your data.
 - Deploy.
   - `goapp deploy <your project>`
 - Query your new Beacon.
