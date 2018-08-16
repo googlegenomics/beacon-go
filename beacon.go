@@ -18,6 +18,7 @@ package beacon
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -44,47 +45,34 @@ func init() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	if config.projectID == "" {
-		http.Error(w, "Mandatory variable GOOGLE_CLOUD_PROJECT not set", http.StatusInternalServerError)
+	if err := validateServerConfig(); err != nil {
+		writeError(w, err)
 		return
 	}
-	if config.table == "" {
-		http.Error(w, "Mandatory variable TABLE not set", http.StatusInternalServerError)
-		return
-	}
+
 	refName, allele, coord, err := parseInput(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed parsing parameters: %v", err), http.StatusBadRequest)
+		writeError(w, err)
 		return
 	}
 
 	ctx := appengine.NewContext(r)
-	exists, err := exists(ctx, refName, allele, coord)
+	exists, err := genomeExists(ctx, refName, allele, coord)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed searching for genome: %v", err), http.StatusInternalServerError)
+		writeError(w, err)
 		return
 	}
 
-	type beaconResponse struct {
-		XMLName struct{} `xml:"BEACONResponse"`
-		Exists  bool     `xml:"exists"`
-	}
-	var resp beaconResponse
-	resp.Exists = exists
-
-	w.Header().Set("Content-Type", "application/xml")
-	enc := xml.NewEncoder(w)
-	enc.Indent("", "  ")
-	if err := enc.Encode(resp); err != nil {
-		http.Error(w, fmt.Sprintf("Failed writing response: %v", err), http.StatusInternalServerError)
+	if err := writeResponse(w, exists); err != nil {
+		writeError(w, err)
 		return
 	}
 }
 
-func exists(ctx context.Context, refName string, allele string, coord int64) (bool, error) {
+func genomeExists(ctx context.Context, refName string, allele string, coord int64) (bool, error) {
 	bqclient, err := bigquery.NewClient(ctx, config.projectID)
 	if err != nil {
-		return false, fmt.Errorf("Failed to access data: %v", err)
+		return false, newDataAccessError("Creating a BigQuery client", err)
 	}
 
 	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
@@ -104,7 +92,7 @@ func exists(ctx context.Context, refName string, allele string, coord int64) (bo
 
 	it, err := q.Read(ctx)
 	if err != nil {
-		return false, fmt.Errorf("Failed querying data: %v", err)
+		return false, newDataAccessError("Querying database", err)
 	}
 
 	type Result struct {
@@ -112,23 +100,102 @@ func exists(ctx context.Context, refName string, allele string, coord int64) (bo
 	}
 	var result Result
 	if err := it.Next(&result); err != nil {
-		return false, fmt.Errorf("Failed reading result: %v", err)
+		return false, newDataAccessError("Reading query result", err)
 	}
 	return result.Count > 0, nil
+}
+
+func validateServerConfig() error {
+	if config.projectID == "" {
+		return newInvalidConfigError("validating GOOGLE_CLOUD_PROJECT value", errors.New("value is mandatory"))
+	}
+	if config.table == "" {
+		return newInvalidConfigError("validating TABLE value", errors.New("value is mandatory"))
+	}
+	return nil
 }
 
 func parseInput(r *http.Request) (string, string, int64, error) {
 	refName := r.FormValue("chromosome")
 	if refName == "" {
-		return "", "", 0, errors.New("chromosome name is required")
+		return "", "", 0, newInvalidInputError("parsing chromosome name", errors.New("value is required"))
 	}
 	allele := r.FormValue("allele")
 	if refName == "" {
-		return "", "", 0, errors.New("allele is required")
+		return "", "", 0, newInvalidInputError("parsing allele name", errors.New("value is required"))
 	}
 	coord, err := strconv.ParseInt(r.FormValue("coordinate"), 10, 64)
 	if err != nil {
-		return "", "", 0, fmt.Errorf("parsing coordinate: %v", err)
+		return "", "", 0, newInvalidInputError("parsing coordinate", err)
 	}
 	return refName, allele, coord, nil
+}
+
+func writeResponse(w http.ResponseWriter, exists bool) error {
+	type beaconResponse struct {
+		XMLName struct{} `xml:"BEACONResponse"`
+		Exists  bool     `xml:"exists"`
+	}
+	var resp beaconResponse
+	resp.Exists = exists
+
+	w.Header().Set("Content-Type", "application/xml")
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	if err := enc.Encode(resp); err != nil {
+		return newApiError("Serializationerror", http.StatusInternalServerError, "Serializing response", err)
+	}
+	return nil
+}
+
+// apiError is used to capture errors that have been defined in the API.
+type apiError struct {
+	name  string
+	code  int
+	cause error
+}
+
+func (err *apiError) Error() string {
+	return fmt.Sprintf("%s (%d): %v", err.name, err.code, err.cause)
+}
+
+func newApiError(name string, code int, context string, err error) error {
+	return &apiError{name, code, fmt.Errorf("%s: %v", context, err)}
+}
+
+func newInvalidConfigError(context string, err error) error {
+	return newApiError("InvalidConfig", http.StatusPreconditionFailed, context, err)
+}
+
+func newInvalidInputError(context string, err error) error {
+	return newApiError("InvalidInput", http.StatusBadRequest, context, err)
+}
+
+func newDataAccessError(context string, err error) error {
+	return newApiError("DataAccessError", http.StatusInternalServerError, context, err)
+}
+
+// writeError writes either a JSON object or bare HTTP error describing err to
+// w.  A JSON object is written only when the error has a name and code defined
+// by the htsget specification.
+func writeError(w http.ResponseWriter, err error) {
+	if err, ok := err.(*apiError); ok {
+		writeJSON(w, err.code, map[string]interface{}{
+			"error":   err.name,
+			"message": fmt.Sprintf("%s: %v", http.StatusText(err.code), err.cause),
+		})
+		return
+	}
+
+	writeHTTPError(w, http.StatusInternalServerError, err)
+}
+
+func writeHTTPError(w http.ResponseWriter, code int, err error) {
+	http.Error(w, fmt.Sprintf("%s: %v", http.StatusText(code), err), code)
+}
+
+func writeJSON(w http.ResponseWriter, code int, v interface{}) {
+	w.Header().Add("Content-type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(v)
 }
