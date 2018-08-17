@@ -1,0 +1,7 @@
+<beacon>
+  <id>google-beacon-go</id>
+  <name>Google Beacon API</name>
+  <apiVersion>{{.ApiVersion}}</apiVersion>
+  <organization>Google</organization>
+  <datasets>{{.Datasets}}</datasets>
+</beacon>
