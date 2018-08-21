@@ -22,11 +22,20 @@ In order to setup and deploy this application, you will need:
 - Edit the configuration.
   - In `beacon.go`, edit the value of `variantSetIds` to reference your data.
 - Deploy.
-  - `goapp deploy <your project>`
+  - `goapp deploy -application <project name> app.yaml`
 - Query your new Beacon.
   - e.g. `http://<your project>.appspot.com/?chromosome=chr17&coordinate=41196407&allele=A`
   - Note that the `chromosome` parameter might look like `chr17` or just plain `17` depending on the reference used.
 
+## Disable
+
+If you'd like to disable the Beacon, follow these steps:
+
+- Go to [https://appengine.google.com/](https://appengine.google.com/).
+- Select your project.
+- Go to "Application Settings".
+- Find and click the "Disable Application" button.
+- You can visit the same settings page to re-enable the application.
 
 ## Authentication
 
