@@ -74,11 +74,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func genomeExists(ctx context.Context, refName string, allele string, coord int64) (bool, error) {
-	bqclient, err := bigquery.NewClient(ctx, config.projectID)
-	if err != nil {
-		return false, newDataAccessError("Creating a BigQuery client", err)
-	}
-
 	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
 	query := fmt.Sprintf(`
 		SELECT count(v.reference_name) as count
@@ -92,9 +87,12 @@ func genomeExists(ctx context.Context, refName string, allele string, coord int6
 		coord,
 		coord+1,
 		allele)
-	q := bqclient.Query(query)
 
-	it, err := q.Read(ctx)
+	bqclient, err := bigquery.NewClient(ctx, config.projectID)
+	if err != nil {
+		return false, newDataAccessError("Creating a BigQuery client", err)
+	}
+	it, err := bqclient.Query(query).Read(ctx)
 	if err != nil {
 		return false, newDataAccessError("Querying database", err)
 	}
