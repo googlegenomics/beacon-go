@@ -18,7 +18,6 @@ package beacon
 
 import (
 	"context"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -32,12 +31,17 @@ import (
 
 type beaconConfig struct {
 	projectID string
-	table     string
+	tableId   string
 }
 
+const (
+	projectKey = "GOOGLE_CLOUD_PROJECT"
+	bqTableKey = "GOOGLE_BIGQUERY_TABLE"
+)
+
 var config = beaconConfig{
-	projectID: os.Getenv("GOOGLE_CLOUD_PROJECT"),
-	table:     os.Getenv("TABLE"),
+	projectID: os.Getenv(projectKey),
+	tableId:   os.Getenv(bqTableKey),
 }
 
 func init() {
@@ -83,7 +87,7 @@ func genomeExists(ctx context.Context, refName string, allele string, coord int6
 			AND v.start <= %d AND %d < v.end
 	 	 	AND reference_bases='%s'
 		LIMIT 1`,
-		fmt.Sprintf("`%s`", config.table),
+		fmt.Sprintf("`%s`", config.tableId),
 		refName,
 		coord,
 		coord+1,
@@ -107,10 +111,10 @@ func genomeExists(ctx context.Context, refName string, allele string, coord int6
 
 func validateServerConfig() error {
 	if config.projectID == "" {
-		return newInvalidConfigError("validating GOOGLE_CLOUD_PROJECT value", errors.New("value is mandatory"))
+		return newInvalidConfigError("validating server config", fmt.Errorf("%s must be specified", projectKey))
 	}
-	if config.table == "" {
-		return newInvalidConfigError("validating TABLE value", errors.New("value is mandatory"))
+	if config.tableId == "" {
+		return newInvalidConfigError("validating server config", fmt.Errorf("%s must be specified", bqTableKey))
 	}
 	return nil
 }
@@ -143,59 +147,46 @@ func writeResponse(w http.ResponseWriter, exists bool) error {
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(resp); err != nil {
-		return newApiError("Serializationerror", http.StatusInternalServerError, "Serializing response", err)
+		return newApiError(http.StatusInternalServerError, "Serializing response", err)
 	}
 	return nil
 }
 
 // apiError is used to capture errors that have been defined in the API.
 type apiError struct {
-	name  string
 	code  int
 	cause error
 }
 
 func (err *apiError) Error() string {
-	return fmt.Sprintf("%s (%d): %v", err.name, err.code, err.cause)
+	return fmt.Sprintf("%d: %v", err.code, err.cause)
 }
 
-func newApiError(name string, code int, context string, err error) error {
-	return &apiError{name, code, fmt.Errorf("%s: %v", context, err)}
+func newApiError(code int, context string, err error) error {
+	return &apiError{code, fmt.Errorf("%s: %v", context, err)}
 }
 
 func newInvalidConfigError(context string, err error) error {
-	return newApiError("InvalidConfig", http.StatusPreconditionFailed, context, err)
+	return newApiError(http.StatusPreconditionFailed, context, fmt.Errorf("invalid config: %v", err))
 }
 
 func newInvalidInputError(context string, err error) error {
-	return newApiError("InvalidInput", http.StatusBadRequest, context, err)
+	return newApiError(http.StatusBadRequest, context, fmt.Errorf("invalid input: %v", err))
 }
 
 func newDataAccessError(context string, err error) error {
-	return newApiError("DataAccessError", http.StatusInternalServerError, context, err)
+	return newApiError(http.StatusInternalServerError, context, fmt.Errorf("data access error: %v", err))
 }
 
-// writeError writes either a JSON object or bare HTTP error describing err to
-// w.  A JSON object is written only when the error has a name and code defined
-// by the htsget specification.
+// writeError writes a bare HTTP error describing err to w.
 func writeError(w http.ResponseWriter, err error) {
 	if err, ok := err.(*apiError); ok {
-		writeJSON(w, err.code, map[string]interface{}{
-			"error":   err.name,
-			"message": fmt.Sprintf("%s: %v", http.StatusText(err.code), err.cause),
-		})
+		writeHTTPError(w, err.code, err)
 		return
 	}
-
 	writeHTTPError(w, http.StatusInternalServerError, err)
 }
 
 func writeHTTPError(w http.ResponseWriter, code int, err error) {
 	http.Error(w, fmt.Sprintf("%s: %v", http.StatusText(code), err), code)
-}
-
-func writeJSON(w http.ResponseWriter, code int, v interface{}) {
-	w.Header().Add("Content-type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(v)
 }

@@ -20,7 +20,7 @@ In order to setup and deploy this application, you will need:
 - Clone this repo.
   - `git clone git@github.com:googlegenomics/beacon-go.git`
 - Edit the configuration.
-  - In `app.yaml`, edit the values of `GOOGLE_CLOUD_PROJECT` and `TABLE` to reference your data.
+  - In `app.yaml`, edit the values of `GOOGLE_CLOUD_PROJECT` and `GOOGLE_BIGQUERY_TABLE` to reference your data.
 - Deploy.
   - `gcloud app deploy <your project>`
 - Query your new Beacon.
