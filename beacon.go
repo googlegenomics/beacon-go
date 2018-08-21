@@ -50,7 +50,7 @@ func init() {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	if err := validateServerConfig(); err != nil {
-		writeError(w, err)
+		writeError(w, fmt.Errorf("validating server config: %v", err))
 		return
 	}
 
@@ -90,29 +90,28 @@ func genomeExists(ctx context.Context, refName string, allele string, coord int6
 
 	bqclient, err := bigquery.NewClient(ctx, config.projectID)
 	if err != nil {
-		return false, newDataAccessError("Creating a BigQuery client", err)
+		return false, fmt.Errorf("creating bigquery client: %v", err)
 	}
 	it, err := bqclient.Query(query).Read(ctx)
 	if err != nil {
-		return false, newDataAccessError("Querying database", err)
+		return false, fmt.Errorf("querying database: %v", err)
 	}
 
-	type Result struct {
+	var result struct {
 		Count int
 	}
-	var result Result
 	if err := it.Next(&result); err != nil {
-		return false, newDataAccessError("Reading query result", err)
+		return false, fmt.Errorf("reading query result: %v", err)
 	}
 	return result.Count > 0, nil
 }
 
 func validateServerConfig() error {
 	if config.projectID == "" {
-		return newInvalidConfigError("validating server config", fmt.Errorf("%s must be specified", projectKey))
+		return fmt.Errorf("%s must be specified", projectKey)
 	}
 	if config.tableId == "" {
-		return newInvalidConfigError("validating server config", fmt.Errorf("%s must be specified", bqTableKey))
+		return fmt.Errorf("%s must be specified", bqTableKey)
 	}
 	return nil
 }
@@ -120,15 +119,15 @@ func validateServerConfig() error {
 func parseInput(r *http.Request) (string, string, int64, error) {
 	refName := r.FormValue("chromosome")
 	if refName == "" {
-		return "", "", 0, newInvalidInputError("parsing chromosome name", errors.New("value is required"))
+		return "", "", 0, newBadRequestError("parsing chromosome name", errors.New("value is required"))
 	}
 	allele := r.FormValue("allele")
 	if refName == "" {
-		return "", "", 0, newInvalidInputError("parsing allele name", errors.New("value is required"))
+		return "", "", 0, newBadRequestError("parsing allele name", errors.New("value is required"))
 	}
 	coord, err := strconv.ParseInt(r.FormValue("coordinate"), 10, 64)
 	if err != nil {
-		return "", "", 0, newInvalidInputError("parsing coordinate", err)
+		return "", "", 0, newBadRequestError("parsing coordinate", err)
 	}
 	return refName, allele, coord, nil
 }
@@ -145,12 +144,11 @@ func writeResponse(w http.ResponseWriter, exists bool) error {
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(resp); err != nil {
-		return newApiError(http.StatusInternalServerError, "Serializing response", err)
+		return fmt.Errorf("serializing response: %v", err)
 	}
 	return nil
 }
 
-// apiError is used to capture errors that have been defined in the API.
 type apiError struct {
 	code  int
 	cause error
@@ -160,20 +158,12 @@ func (err *apiError) Error() string {
 	return fmt.Sprintf("%d: %v", err.code, err.cause)
 }
 
-func newApiError(code int, context string, err error) error {
+func newHttpError(code int, context string, err error) error {
 	return &apiError{code, fmt.Errorf("%s: %v", context, err)}
 }
 
-func newInvalidConfigError(context string, err error) error {
-	return newApiError(http.StatusPreconditionFailed, context, fmt.Errorf("invalid config: %v", err))
-}
-
-func newInvalidInputError(context string, err error) error {
-	return newApiError(http.StatusBadRequest, context, fmt.Errorf("invalid input: %v", err))
-}
-
-func newDataAccessError(context string, err error) error {
-	return newApiError(http.StatusInternalServerError, context, fmt.Errorf("data access error: %v", err))
+func newBadRequestError(context string, err error) error {
+	return newHttpError(http.StatusBadRequest, context, fmt.Errorf("invalid input: %v", err))
 }
 
 // writeError writes a bare HTTP error describing err to w.
