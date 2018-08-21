@@ -50,14 +50,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refName, allele, coord, err := parseInput(r)
+	query, err := parseInput(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 
 	ctx := appengine.NewContext(r)
-	exists, err := genomeExists(ctx, refName, allele, coord)
+	exists, err := genomeExists(ctx, query)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -69,28 +69,26 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func genomeExists(ctx context.Context, refName string, allele string, coord int64) (bool, error) {
+func genomeExists(ctx context.Context, q query) (bool, error) {
+	var w where
+	w.append(fmt.Sprintf("reference_name='%s'", q.referenceName))
+	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
+	w.append(fmt.Sprintf("v.start <= %d AND %d < v.end", q.coord, q.coord+1))
+	w.append(fmt.Sprintf("reference_bases='%s'", q.allele))
+
+	query := fmt.Sprintf(`
+		SELECT count(v.reference_name) as count
+		FROM %s as v
+		WHERE %s
+		LIMIT 1`,
+		fmt.Sprintf("`%s`", config.table),
+		w.clause)
+
 	bqclient, err := bigquery.NewClient(ctx, config.projectID)
 	if err != nil {
 		return false, newDataAccessError("Creating a BigQuery client", err)
 	}
-
-	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
-	query := fmt.Sprintf(`
-		SELECT count(v.reference_name) as count
-		FROM %s as v
-		WHERE reference_name='%s'
-			AND v.start <= %d AND %d < v.end
-	 	 	AND reference_bases='%s'
-		LIMIT 1`,
-		fmt.Sprintf("`%s`", config.table),
-		refName,
-		coord,
-		coord+1,
-		allele)
-	q := bqclient.Query(query)
-
-	it, err := q.Read(ctx)
+	it, err := bqclient.Query(query).Read(ctx)
 	if err != nil {
 		return false, newDataAccessError("Querying database", err)
 	}
@@ -115,20 +113,26 @@ func validateServerConfig() error {
 	return nil
 }
 
-func parseInput(r *http.Request) (string, string, int64, error) {
+type query struct {
+	referenceName string
+	allele        string
+	coord         int64
+}
+
+func parseInput(r *http.Request) (query, error) {
 	refName := r.FormValue("chromosome")
 	if refName == "" {
-		return "", "", 0, newInvalidInputError("parsing chromosome name", errors.New("value is required"))
+		return query{}, newInvalidInputError("parsing chromosome name", errors.New("value is required"))
 	}
 	allele := r.FormValue("allele")
 	if refName == "" {
-		return "", "", 0, newInvalidInputError("parsing allele name", errors.New("value is required"))
+		return query{}, newInvalidInputError("parsing allele name", errors.New("value is required"))
 	}
 	coord, err := strconv.ParseInt(r.FormValue("coordinate"), 10, 64)
 	if err != nil {
-		return "", "", 0, newInvalidInputError("parsing coordinate", err)
+		return query{}, newInvalidInputError("parsing coordinate", err)
 	}
-	return refName, allele, coord, nil
+	return query{refName, allele, coord}, nil
 }
 
 func writeResponse(w http.ResponseWriter, exists bool) error {
@@ -146,6 +150,21 @@ func writeResponse(w http.ResponseWriter, exists bool) error {
 		return newApiError("Serializationerror", http.StatusInternalServerError, "Serializing response", err)
 	}
 	return nil
+}
+
+type where struct {
+	clause string
+}
+
+func (w *where) append(statement string) {
+	if statement == "" {
+		return
+	}
+	var conj string
+	if len(w.clause) > 0 {
+		conj = " AND "
+	}
+	w.clause = fmt.Sprintf("%s%s(%s)", w.clause, conj, statement)
 }
 
 // apiError is used to capture errors that have been defined in the API.
