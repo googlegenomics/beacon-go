@@ -41,7 +41,7 @@ var config = beaconConfig{
 }
 
 func init() {
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/query", handler)
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
