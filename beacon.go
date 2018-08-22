@@ -17,110 +17,134 @@
 package beacon
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/genomics/v1"
-	"google.golang.org/appengine"
+	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+
+	"cloud.google.com/go/bigquery"
+	"google.golang.org/appengine"
 )
 
 type beaconConfig struct {
-	variantSetIds []string
+	projectID string
+	tableId   string
 }
 
+const (
+	projectKey = "GOOGLE_CLOUD_PROJECT"
+	bqTableKey = "GOOGLE_BIGQUERY_TABLE"
+)
+
 var config = beaconConfig{
-	variantSetIds: []string{"3049512673186936334"},
+	projectID: os.Getenv(projectKey),
+	tableId:   os.Getenv(bqTableKey),
 }
 
 func init() {
 	http.HandleFunc("/", handler)
 }
 
-func requestToSearch(r *http.Request) (*genomics.SearchVariantsRequest, string, error) {
-	allele := r.FormValue("allele")
-	search := &genomics.SearchVariantsRequest{
-		ReferenceName: r.FormValue("chromosome"),
-		VariantSetIds: config.variantSetIds,
-	}
-
-	coord, err := strconv.ParseInt(r.FormValue("coordinate"), 10, 64)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
-	search.Start = coord
-	search.End = search.Start + 1
-
-	if search.ReferenceName == "" {
-		return nil, "", errors.New("missing reference name")
-	}
-	if allele == "" {
-		return nil, "", errors.New("missing allele")
-	}
-
-	return search, allele, nil
-}
-
 func handler(w http.ResponseWriter, r *http.Request) {
-	c := appengine.NewContext(r)
-	search, allele, err := requestToSearch(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := validateServerConfig(); err != nil {
+		http.Error(w, fmt.Sprintf("validating server configuration: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	client, err := google.DefaultClient(c, genomics.GenomicsReadonlyScope)
+	refName, allele, coord, err := parseInput(r)
 	if err != nil {
-		http.Error(w, "Invalid server configuration", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("validating input: %v", err), http.StatusBadRequest)
+		return
 	}
-	genomicsService, err := genomics.New(client)
-	if err != nil {
-		http.Error(w, "Invalid server configuration", http.StatusInternalServerError)
-	}
-	variantsService := genomics.NewVariantsService(genomicsService)
 
+	ctx := appengine.NewContext(r)
+	exists, err := genomeExists(ctx, refName, allele, coord)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("computing result: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := writeResponse(w, exists); err != nil {
+		http.Error(w, fmt.Sprintf("validating server configuration: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+func genomeExists(ctx context.Context, refName string, allele string, coord int64) (bool, error) {
+	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
+	query := fmt.Sprintf(`
+		SELECT count(v.reference_name) as count
+		FROM %s as v
+		WHERE reference_name='%s'
+			AND v.start <= %d AND %d < v.end
+	 	 	AND reference_bases='%s'
+		LIMIT 1`,
+		fmt.Sprintf("`%s`", config.tableId),
+		refName,
+		coord,
+		coord+1,
+		allele)
+
+	bqclient, err := bigquery.NewClient(ctx, config.projectID)
+	if err != nil {
+		return false, fmt.Errorf("creating bigquery client: %v", err)
+	}
+	it, err := bqclient.Query(query).Read(ctx)
+	if err != nil {
+		return false, fmt.Errorf("querying database: %v", err)
+	}
+
+	var result struct {
+		Count int
+	}
+	if err := it.Next(&result); err != nil {
+		return false, fmt.Errorf("reading query result: %v", err)
+	}
+	return result.Count > 0, nil
+}
+
+func validateServerConfig() error {
+	if config.projectID == "" {
+		return fmt.Errorf("%s must be specified", projectKey)
+	}
+	if config.tableId == "" {
+		return fmt.Errorf("%s must be specified", bqTableKey)
+	}
+	return nil
+}
+
+func parseInput(r *http.Request) (string, string, int64, error) {
+	refName := r.FormValue("chromosome")
+	if refName == "" {
+		return "", "", 0, errors.New("missing chromosome name")
+	}
+	allele := r.FormValue("allele")
+	if refName == "" {
+		return "", "", 0, errors.New("missing allele")
+	}
+	coord, err := strconv.ParseInt(r.FormValue("coordinate"), 10, 64)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("parsing coordinate: %v", err)
+	}
+	return refName, allele, coord, nil
+}
+
+func writeResponse(w http.ResponseWriter, exists bool) error {
 	type beaconResponse struct {
 		XMLName struct{} `xml:"BEACONResponse"`
 		Exists  bool     `xml:"exists"`
 	}
 	var resp beaconResponse
-
-	for {
-		searchResponse, err := variantsService.Search(search).Do()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		for _, variant := range searchResponse.Variants {
-			if search.Start != variant.Start {
-				continue
-			}
-			if allele == variant.ReferenceBases {
-				resp.Exists = true
-			} else {
-				for _, base := range variant.AlternateBases {
-					if base == allele {
-						resp.Exists = true
-						break
-					}
-				}
-			}
-		}
-
-		if resp.Exists || searchResponse.NextPageToken == "" {
-			break
-		}
-		search.PageToken = searchResponse.NextPageToken
-	}
+	resp.Exists = exists
 
 	w.Header().Set("Content-Type", "application/xml")
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
-	if err = enc.Encode(resp); err != nil {
-		http.Error(w, "Failed writing response", http.StatusInternalServerError)
+	if err := enc.Encode(resp); err != nil {
+		return fmt.Errorf("serializing response: %v", err)
 	}
+	return nil
 }
