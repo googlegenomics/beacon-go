@@ -21,4 +21,4 @@ handlers:
 
 env_variables:
 #  GOOGLE_CLOUD_PROJECT: change-to-your-project-id
-#  TABLE: genomics-public-data.platinum_genomes.variants
+#  GOOGLE_BIGQUERY_TABLE: genomics-public-data.platinum_genomes.variants
