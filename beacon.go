@@ -77,7 +77,7 @@ func query(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := appengine.NewContext(r)
-	exists, err := GenomeExists(ctx, refName, allele, coord)
+	exists, err := genomeExists(ctx, refName, allele, coord)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("computing result: %v", err), http.StatusInternalServerError)
 		return
@@ -89,7 +89,7 @@ func query(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GenomeExists(ctx context.Context, refName string, allele string, coord int64) (bool, error) {
+func genomeExists(ctx context.Context, refName string, allele string, coord int64) (bool, error) {
 	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
 	query := fmt.Sprintf(`
 		SELECT count(v.reference_name) as count
