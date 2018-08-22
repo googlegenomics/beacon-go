@@ -37,7 +37,7 @@ type beaconConfig struct {
 }
 
 const (
-	apiVersionKey = "VERSION"
+	apiVersionKey = "BEACON_API_VERSION"
 	projectKey    = "GOOGLE_CLOUD_PROJECT"
 	bqTableKey    = "GOOGLE_BIGQUERY_TABLE"
 )
@@ -58,6 +58,7 @@ func init() {
 
 func aboutBeacon(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
+		http.Error(w, fmt.Sprintf("HTTP method %s not supported", r.Method), http.StatusMethodNotAllowed)
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml")
