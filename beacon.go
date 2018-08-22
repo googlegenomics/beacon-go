@@ -50,25 +50,25 @@ func init() {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	if err := validateServerConfig(); err != nil {
-		writeError(w, fmt.Errorf("validating server config: %v", err))
+		http.Error(w, fmt.Sprintf("validating server configuration: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	refName, allele, coord, err := parseInput(r)
 	if err != nil {
-		writeError(w, err)
+		http.Error(w, fmt.Sprintf("validating input: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	ctx := appengine.NewContext(r)
 	exists, err := genomeExists(ctx, refName, allele, coord)
 	if err != nil {
-		writeError(w, err)
+		http.Error(w, fmt.Sprintf("computing result: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	if err := writeResponse(w, exists); err != nil {
-		writeError(w, err)
+		http.Error(w, fmt.Sprintf("validating server configuration: %v", err), http.StatusInternalServerError)
 		return
 	}
 }
@@ -119,15 +119,15 @@ func validateServerConfig() error {
 func parseInput(r *http.Request) (string, string, int64, error) {
 	refName := r.FormValue("chromosome")
 	if refName == "" {
-		return "", "", 0, newBadRequestError("parsing chromosome name", errors.New("value is required"))
+		return "", "", 0, errors.New("missing chromosome name")
 	}
 	allele := r.FormValue("allele")
 	if refName == "" {
-		return "", "", 0, newBadRequestError("parsing allele name", errors.New("value is required"))
+		return "", "", 0, errors.New("missing allele")
 	}
 	coord, err := strconv.ParseInt(r.FormValue("coordinate"), 10, 64)
 	if err != nil {
-		return "", "", 0, newBadRequestError("parsing coordinate", err)
+		return "", "", 0, fmt.Errorf("parsing coordinate: %v", err)
 	}
 	return refName, allele, coord, nil
 }
@@ -147,34 +147,4 @@ func writeResponse(w http.ResponseWriter, exists bool) error {
 		return fmt.Errorf("serializing response: %v", err)
 	}
 	return nil
-}
-
-type apiError struct {
-	code  int
-	cause error
-}
-
-func (err *apiError) Error() string {
-	return fmt.Sprintf("%d: %v", err.code, err.cause)
-}
-
-func newHttpError(code int, context string, err error) error {
-	return &apiError{code, fmt.Errorf("%s: %v", context, err)}
-}
-
-func newBadRequestError(context string, err error) error {
-	return newHttpError(http.StatusBadRequest, context, fmt.Errorf("invalid input: %v", err))
-}
-
-// writeError writes a bare HTTP error describing err to w.
-func writeError(w http.ResponseWriter, err error) {
-	if err, ok := err.(*apiError); ok {
-		writeHTTPError(w, err.code, err)
-		return
-	}
-	writeHTTPError(w, http.StatusInternalServerError, err)
-}
-
-func writeHTTPError(w http.ResponseWriter, code int, err error) {
-	http.Error(w, fmt.Sprintf("%s: %v", http.StatusText(code), err), code)
 }
