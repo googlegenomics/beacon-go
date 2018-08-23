@@ -58,7 +58,7 @@ func init() {
 
 func aboutBeacon(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		http.Error(w, fmt.Sprintf("HTTP method %s not supported", r.Method), http.StatusMethodNotAllowed)
+		http.Error(w, fmt.Sprintf("HTTP method %s not supported", r.Method), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml")
