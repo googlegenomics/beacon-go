@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Google Inc.
+ * Copyright (C) 2015 Google Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -33,7 +33,7 @@ import (
 type beaconConfig struct {
 	ApiVersion string
 	ProjectID  string
-	TableId    string
+	TableID    string
 }
 
 const (
@@ -47,7 +47,7 @@ var (
 	config        = beaconConfig{
 		ApiVersion: os.Getenv(apiVersionKey),
 		ProjectID:  os.Getenv(projectKey),
-		TableId:    os.Getenv(bqTableKey),
+		TableID:    os.Getenv(bqTableKey),
 	}
 )
 
@@ -99,7 +99,7 @@ func genomeExists(ctx context.Context, refName string, allele string, coord int6
 			AND v.start <= %d AND %d < v.end
 	 	 	AND reference_bases='%s'
 		LIMIT 1`,
-		fmt.Sprintf("`%s`", config.TableId),
+		fmt.Sprintf("`%s`", config.TableID),
 		refName,
 		coord,
 		coord+1,
@@ -127,7 +127,7 @@ func validateServerConfig() error {
 	if config.ProjectID == "" {
 		return fmt.Errorf("%s must be specified", projectKey)
 	}
-	if config.TableId == "" {
+	if config.TableID == "" {
 		return fmt.Errorf("%s must be specified", bqTableKey)
 	}
 	return nil
