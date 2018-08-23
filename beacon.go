@@ -21,6 +21,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"strconv"
@@ -30,25 +31,41 @@ import (
 )
 
 type beaconConfig struct {
-	projectID string
-	tableId   string
+	ApiVersion string
+	ProjectID  string
+	TableID    string
 }
 
 const (
-	projectKey = "GOOGLE_CLOUD_PROJECT"
-	bqTableKey = "GOOGLE_BIGQUERY_TABLE"
+	apiVersionKey = "BEACON_API_VERSION"
+	projectKey    = "GOOGLE_CLOUD_PROJECT"
+	bqTableKey    = "GOOGLE_BIGQUERY_TABLE"
 )
 
-var config = beaconConfig{
-	projectID: os.Getenv(projectKey),
-	tableId:   os.Getenv(bqTableKey),
-}
+var (
+	aboutTemplate = template.Must(template.ParseFiles("about.xml"))
+	config        = beaconConfig{
+		ApiVersion: os.Getenv(apiVersionKey),
+		ProjectID:  os.Getenv(projectKey),
+		TableID:    os.Getenv(bqTableKey),
+	}
+)
 
 func init() {
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/", aboutBeacon)
+	http.HandleFunc("/query", query)
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func aboutBeacon(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, fmt.Sprintf("HTTP method %s not supported", r.Method), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/xml")
+	aboutTemplate.Execute(w, config)
+}
+
+func query(w http.ResponseWriter, r *http.Request) {
 	if err := validateServerConfig(); err != nil {
 		http.Error(w, fmt.Sprintf("validating server configuration: %v", err), http.StatusInternalServerError)
 		return
@@ -82,13 +99,13 @@ func genomeExists(ctx context.Context, refName string, allele string, coord int6
 			AND v.start <= %d AND %d < v.end
 	 	 	AND reference_bases='%s'
 		LIMIT 1`,
-		fmt.Sprintf("`%s`", config.tableId),
+		fmt.Sprintf("`%s`", config.TableID),
 		refName,
 		coord,
 		coord+1,
 		allele)
 
-	bqclient, err := bigquery.NewClient(ctx, config.projectID)
+	bqclient, err := bigquery.NewClient(ctx, config.ProjectID)
 	if err != nil {
 		return false, fmt.Errorf("creating bigquery client: %v", err)
 	}
@@ -107,10 +124,10 @@ func genomeExists(ctx context.Context, refName string, allele string, coord int6
 }
 
 func validateServerConfig() error {
-	if config.projectID == "" {
+	if config.ProjectID == "" {
 		return fmt.Errorf("%s must be specified", projectKey)
 	}
-	if config.tableId == "" {
+	if config.TableID == "" {
 		return fmt.Errorf("%s must be specified", bqTableKey)
 	}
 	return nil
