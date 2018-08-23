@@ -20,6 +20,6 @@ handlers:
   script: _go_app
 
 env_variables:
-  VERSION: 1.0.0
+  BEACON_API_VERSION: 0.0.1
 #  GOOGLE_CLOUD_PROJECT: change-to-your-project-id
 #  GOOGLE_BIGQUERY_TABLE: genomics-public-data.platinum_genomes.variants

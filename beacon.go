@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Google Inc.
+ * Copyright (C) 2015 Google Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -33,11 +33,11 @@ import (
 type beaconConfig struct {
 	ApiVersion string
 	ProjectID  string
-	TableId    string
+	TableID    string
 }
 
 const (
-	apiVersionKey = "VERSION"
+	apiVersionKey = "BEACON_API_VERSION"
 	projectKey    = "GOOGLE_CLOUD_PROJECT"
 	bqTableKey    = "GOOGLE_BIGQUERY_TABLE"
 )
@@ -47,7 +47,7 @@ var (
 	config        = beaconConfig{
 		ApiVersion: os.Getenv(apiVersionKey),
 		ProjectID:  os.Getenv(projectKey),
-		TableId:    os.Getenv(bqTableKey),
+		TableID:    os.Getenv(bqTableKey),
 	}
 )
 
@@ -58,6 +58,7 @@ func init() {
 
 func aboutBeacon(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
+		http.Error(w, fmt.Sprintf("HTTP method %s not supported", r.Method), http.StatusMethodNotAllowed)
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml")
@@ -101,9 +102,8 @@ func genomeExists(ctx context.Context, params queryParams) (bool, error) {
 		FROM %s as v
 		WHERE %s
 		LIMIT 1`,
-		fmt.Sprintf("`%s`", config.TableId),
+		fmt.Sprintf("`%s`", config.TableID),
 		w.clause)
-
 	bqclient, err := bigquery.NewClient(ctx, config.ProjectID)
 	if err != nil {
 		return false, fmt.Errorf("creating bigquery client: %v", err)
@@ -141,7 +141,7 @@ func validateServerConfig() error {
 	if config.ProjectID == "" {
 		return fmt.Errorf("%s must be specified", projectKey)
 	}
-	if config.TableId == "" {
+	if config.TableID == "" {
 		return fmt.Errorf("%s must be specified", bqTableKey)
 	}
 	return nil
