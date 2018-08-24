@@ -103,17 +103,17 @@ func validateServerConfig() error {
 }
 
 func parseInput(r *http.Request) (*Query, error) {
-	var q Query
-	q.refName = r.FormValue("chromosome")
-	q.allele = r.FormValue("allele")
+	var query Query
+	query.refName = r.FormValue("chromosome")
+	query.allele = r.FormValue("allele")
 
 	coord, err := getFormValueInt(r, "coordinate")
 	if err != nil {
 		return nil, fmt.Errorf("parsing coordinate: %v", err)
 	}
-	q.coord = coord
+	query.coord = coord
 
-	return &q, nil
+	return &query, nil
 }
 
 func getFormValueInt(r *http.Request, key string) (*int64, error) {
