@@ -22,12 +22,14 @@ func (q *Query) Execute(ctx context.Context, projectID, tableID string) (bool, e
 		WHERE %s
 		LIMIT 1`,
 		fmt.Sprintf("`%s`", tableID),
-		q.whereClause())
-	bqclient, err := bigquery.NewClient(ctx, projectID)
+		q.whereClause(),
+	)
+
+	bqClient, err := bigquery.NewClient(ctx, projectID)
 	if err != nil {
 		return false, fmt.Errorf("creating bigquery client: %v", err)
 	}
-	it, err := bqclient.Query(query).Read(ctx)
+	it, err := bqClient.Query(query).Read(ctx)
 	if err != nil {
 		return false, fmt.Errorf("querying database: %v", err)
 	}
