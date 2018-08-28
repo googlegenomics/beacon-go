@@ -3,5 +3,5 @@
   <name>Google Beacon API</name>
   <apiVersion>{{.ApiVersion}}</apiVersion>
   <organization>Google</organization>
-  <datasets>{{.TableId}}</datasets>
+  <datasets>{{.TableID}}</datasets>
 </beacon>

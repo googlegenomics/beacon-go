@@ -85,11 +85,7 @@ func query(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("computing result: %v", err), http.StatusInternalServerError)
 		return
 	}
-
-	if err := writeResponse(w, exists); err != nil {
-		http.Error(w, fmt.Sprintf("writing response: %v", err), http.StatusInternalServerError)
-		return
-	}
+	writeResponse(w, exists)
 }
 
 func validateServerConfig() error {
@@ -104,14 +100,14 @@ func validateServerConfig() error {
 
 func parseInput(r *http.Request) (*Query, error) {
 	var query Query
-	query.refName = r.FormValue("chromosome")
-	query.allele = r.FormValue("allele")
+	query.RefName = r.FormValue("chromosome")
+	query.Allele = r.FormValue("allele")
 
 	coord, err := getFormValueInt(r, "coordinate")
 	if err != nil {
 		return nil, fmt.Errorf("parsing coordinate: %v", err)
 	}
-	query.coord = coord
+	query.Coord = coord
 
 	return &query, nil
 }
@@ -128,7 +124,7 @@ func getFormValueInt(r *http.Request, key string) (*int64, error) {
 	return &value, nil
 }
 
-func writeResponse(w http.ResponseWriter, exists bool) error {
+func writeResponse(w http.ResponseWriter, exists bool) {
 	type beaconResponse struct {
 		XMLName struct{} `xml:"BEACONResponse"`
 		Exists  bool     `xml:"exists"`
@@ -139,8 +135,5 @@ func writeResponse(w http.ResponseWriter, exists bool) error {
 	w.Header().Set("Content-Type", "application/xml")
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
-	if err := enc.Encode(resp); err != nil {
-		return fmt.Errorf("serializing response: %v", err)
-	}
-	return nil
+	enc.Encode(resp)
 }

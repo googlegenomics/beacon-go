@@ -9,12 +9,14 @@ import (
 	"cloud.google.com/go/bigquery"
 )
 
+// Query holds information about a single query against a Beacon.
 type Query struct {
-	refName string
-	allele  string
-	coord   *int64
+	RefName string
+	Allele  string
+	Coord   *int64
 }
 
+// Execute queries the allele database with the Query parameters.
 func (q *Query) Execute(ctx context.Context, projectID, tableID string) (bool, error) {
 	query := fmt.Sprintf(`
 		SELECT count(v.reference_name) as count
@@ -25,11 +27,11 @@ func (q *Query) Execute(ctx context.Context, projectID, tableID string) (bool, e
 		q.whereClause(),
 	)
 
-	bqClient, err := bigquery.NewClient(ctx, projectID)
+	client, err := bigquery.NewClient(ctx, projectID)
 	if err != nil {
 		return false, fmt.Errorf("creating bigquery client: %v", err)
 	}
-	it, err := bqClient.Query(query).Read(ctx)
+	it, err := client.Query(query).Read(ctx)
 	if err != nil {
 		return false, fmt.Errorf("querying database: %v", err)
 	}
@@ -43,14 +45,15 @@ func (q *Query) Execute(ctx context.Context, projectID, tableID string) (bool, e
 	return result.Count > 0, nil
 }
 
+// ValidateInput validates the Query parameters meet the ga4gh beacon api requirements.
 func (q *Query) ValidateInput() error {
-	if q.refName == "" {
+	if q.RefName == "" {
 		return errors.New("missing chromosome name")
 	}
-	if q.allele == "" {
+	if q.Allele == "" {
 		return errors.New("missing allele")
 	}
-	if q.coord == nil {
+	if q.Coord == nil {
 		return errors.New("missing coordinate")
 	}
 	return nil
@@ -68,11 +71,11 @@ func (q *Query) whereClause() string {
 			add(fmt.Sprintf("%s='%s'", dbColumn, value))
 		}
 	}
-	simpleClause("reference_name", q.refName)
-	simpleClause("reference_bases", q.allele)
+	simpleClause("reference_name", q.RefName)
+	simpleClause("reference_bases", q.Allele)
 	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
-	if q.coord != nil {
-		add(fmt.Sprintf("v.start <= %d AND %d < v.end", *q.coord, *q.coord+1))
+	if q.Coord != nil {
+		add(fmt.Sprintf("v.start <= %d AND %d < v.end", *q.Coord, *q.Coord+1))
 	}
 	return strings.Join(clauses, " AND ")
 }
