@@ -11,9 +11,12 @@ import (
 
 // Query holds information about a single query against a Beacon.
 type Query struct {
+	// RefName - the chromosome reference name.
 	RefName string
-	Allele  string
-	Coord   *int64
+	// Allele - the allele reference base.
+	Allele string
+	// Coord - the coordinate that intersects the retrieved alleles.
+	Coord *int64
 }
 
 // Execute queries the allele database with the Query parameters.
@@ -61,21 +64,19 @@ func (q *Query) ValidateInput() error {
 
 func (q *Query) whereClause() string {
 	var clauses []string
-	add := func(clause string) {
-		if clause != "" {
-			clauses = append(clauses, clause)
-		}
+	add := func(format string, args ...interface{}) {
+		clauses = append(clauses, fmt.Sprintf(format, args...))
 	}
 	simpleClause := func(dbColumn, value string) {
 		if dbColumn != "" && value != "" {
-			add(fmt.Sprintf("%s='%s'", dbColumn, value))
+			add("%s='%s'", dbColumn, value)
 		}
 	}
 	simpleClause("reference_name", q.RefName)
 	simpleClause("reference_bases", q.Allele)
 	// Start is inclusive, End is exclusive.  Search exactly for coordinate.
 	if q.Coord != nil {
-		add(fmt.Sprintf("v.start <= %d AND %d < v.end", *q.Coord, *q.Coord+1))
+		add("v.start <= %d AND %d < v.end", *q.Coord, *q.Coord+1)
 	}
 	return strings.Join(clauses, " AND ")
 }
