@@ -1,4 +1,4 @@
-package beacon
+package query
 
 import (
 	"context"

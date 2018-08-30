@@ -12,8 +12,7 @@
  * the License.
  */
 
-// Package beacon implements a GA4GH Beacon (http://ga4gh.org/#/beacon) backed
-// by the Google Genomics Variants service search API.
+// Package beacon contains an implementation of GA4GH Beacon API (http://ga4gh.org/#/beacon).
 package beacon
 
 import (
@@ -21,53 +20,38 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"os"
 	"strconv"
 
+	"github.com/googlegenomics/beacon-go/internal/query"
 	"google.golang.org/appengine"
 )
 
-type beaconConfig struct {
+// BeaconAPI implements a GA4GH Beacon API (http://ga4gh.org/#/beacon) backed
+// by a Google Cloud BigQuery allele table.
+type BeaconAPI struct {
+	// ApiVersion the version of the GA4GH Beacon specification the API implements.
 	ApiVersion string
-	ProjectID  string
-	TableID    string
+	// ProjectID the GCloud project ID.
+	ProjectID string
+	// TableID the ID of the allele BigQuery table to query.
+	// Must be provided in the following format: bigquery-project.dataset.table.
+	TableID string
 }
-
-const (
-	apiVersionKey = "BEACON_API_VERSION"
-	projectKey    = "GOOGLE_CLOUD_PROJECT"
-	bqTableKey    = "GOOGLE_BIGQUERY_TABLE"
-)
 
 var (
 	aboutTemplate = template.Must(template.ParseFiles("about.xml"))
-	config        = beaconConfig{
-		ApiVersion: os.Getenv(apiVersionKey),
-		ProjectID:  os.Getenv(projectKey),
-		TableID:    os.Getenv(bqTableKey),
-	}
 )
 
-func init() {
-	http.HandleFunc("/", aboutBeacon)
-	http.HandleFunc("/query", query)
-}
-
-func aboutBeacon(w http.ResponseWriter, r *http.Request) {
+func (api *BeaconAPI) About(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, fmt.Sprintf("HTTP method %s not supported", r.Method), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml")
-	aboutTemplate.Execute(w, config)
+	aboutTemplate.Execute(w, api)
 }
 
-func query(w http.ResponseWriter, r *http.Request) {
-	if err := validateServerConfig(); err != nil {
-		http.Error(w, fmt.Sprintf("validating server configuration: %v", err), http.StatusInternalServerError)
-		return
-	}
-
+func (api *BeaconAPI) Query(w http.ResponseWriter, r *http.Request) {
 	query, err := parseInput(r)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("parsing input: %v", err), http.StatusBadRequest)
@@ -80,7 +64,7 @@ func query(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := appengine.NewContext(r)
-	exists, err := query.Execute(ctx, config.ProjectID, config.TableID)
+	exists, err := query.Execute(ctx, api.ProjectID, api.TableID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("computing result: %v", err), http.StatusInternalServerError)
 		return
@@ -88,18 +72,8 @@ func query(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, exists)
 }
 
-func validateServerConfig() error {
-	if config.ProjectID == "" {
-		return fmt.Errorf("%s must be specified", projectKey)
-	}
-	if config.TableID == "" {
-		return fmt.Errorf("%s must be specified", bqTableKey)
-	}
-	return nil
-}
-
-func parseInput(r *http.Request) (*Query, error) {
-	var query Query
+func parseInput(r *http.Request) (*query.Query, error) {
+	var query query.Query
 	query.RefName = r.FormValue("chromosome")
 	query.Allele = r.FormValue("allele")
 
