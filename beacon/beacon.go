@@ -26,13 +26,7 @@ import (
 	"google.golang.org/appengine"
 )
 
-const (
-	// beaconAPIVersion the version of the GA4GH Beacon specification the API implements.
-	beaconAPIVersion = "v0.0.1"
-
-	aboutDefaultPath = "/"
-	queryDefaultPath = "/query"
-)
+const beaconAPIVersion = "v0.0.1"
 
 var (
 	aboutTemplate = template.Must(template.ParseFiles("about.xml"))
@@ -50,8 +44,8 @@ type Server struct {
 
 // Export registers the beacon API endpoint with mux.
 func (server *Server) Export(mux *http.ServeMux) {
-	mux.Handle(aboutDefaultPath, forwardOrigin(server.About))
-	mux.Handle(queryDefaultPath, forwardOrigin(server.Query))
+	mux.Handle("/", forwardOrigin(server.About))
+	mux.Handle("/query", forwardOrigin(server.Query))
 }
 
 // About retrieves all the necessary information on the beacon and the API.
@@ -61,15 +55,10 @@ func (api *Server) About(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml")
-
-	info := struct {
-		APIVersion string
-		TableID    string
-	}{
-		APIVersion: beaconAPIVersion,
-		TableID:    api.TableID,
-	}
-	aboutTemplate.Execute(w, info)
+	aboutTemplate.Execute(w, map[string]string{
+		"APIVersion": beaconAPIVersion,
+		"TableID":    api.TableID,
+	})
 }
 
 // Query retrieves whether the requested allele exists in the dataset.
