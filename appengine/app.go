@@ -1,35 +1,33 @@
 package appengine
 
 import (
-	"net/http"
-
-	"os"
-
 	"fmt"
+	"net/http"
+	"os"
 
 	"github.com/googlegenomics/beacon-go/beacon"
 )
 
 const (
-	apiVersion = "BEACON_API_VERSION"
-	project    = "GOOGLE_CLOUD_PROJECT"
-	bqTable    = "GOOGLE_BIGQUERY_TABLE"
+	project = "GOOGLE_CLOUD_PROJECT"
+	bqTable = "GOOGLE_BIGQUERY_TABLE"
 )
 
 func init() {
-	beaconAPI := beacon.BeaconAPI{
-		ApiVersion: os.Getenv(apiVersion),
-		ProjectID:  os.Getenv(project),
-		TableID:    os.Getenv(bqTable),
+	server := beacon.Server{
+		ProjectID: os.Getenv(project),
+		TableID:   os.Getenv(bqTable),
 	}
 
-	if beaconAPI.ProjectID == "" {
+	if server.ProjectID == "" {
 		panic(fmt.Sprintf("environment variable %s must be specified", project))
 	}
-	if beaconAPI.TableID == "" {
+	if server.TableID == "" {
 		panic(fmt.Sprintf("environment variable %s must be specified", bqTable))
 	}
 
-	http.HandleFunc("/", beaconAPI.About)
-	http.HandleFunc("/query", beaconAPI.Query)
+	mux := http.NewServeMux()
+	server.Export(mux)
+
+	http.HandleFunc("/", mux.ServeHTTP)
 }

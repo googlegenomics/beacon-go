@@ -1,4 +1,19 @@
-package query
+/*
+ * Copyright (C) 2018 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
+// Package variants contains support for variant specific operations.
+package variants
 
 import (
 	"context"
@@ -11,11 +26,11 @@ import (
 
 // Query holds information about a single query against a Beacon.
 type Query struct {
-	// RefName - the chromosome reference name.
+	// RefName is the chromosome reference name.
 	RefName string
-	// Allele - the allele reference base.
+	// Allele is the allele reference base.
 	Allele string
-	// Coord - the coordinate that intersects the retrieved alleles.
+	// Coord is the coordinate that intersects the retrieved alleles.
 	Coord *int64
 }
 
