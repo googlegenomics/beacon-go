@@ -16,9 +16,12 @@
 package beacon
 
 import (
+	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 
@@ -83,17 +86,38 @@ func (api *Server) Query(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseInput(r *http.Request) (*variants.Query, error) {
-	var query variants.Query
-	query.RefName = r.FormValue("chromosome")
-	query.Allele = r.FormValue("allele")
 
-	coord, err := getFormValueInt(r, "coordinate")
-	if err != nil {
-		return nil, fmt.Errorf("parsing coordinate: %v", err)
+	switch r.Method {
+	case "GET":
+		var query variants.Query
+		query.RefName = r.FormValue("chromosome")
+		query.Allele = r.FormValue("allele")
+
+		coord, err := getFormValueInt(r, "coordinate")
+		if err != nil {
+			return nil, fmt.Errorf("parsing coordinate: %v", err)
+		}
+		query.Coord = coord
+
+		return &query, nil
+	case "POST":
+		var params struct {
+			RefName string `json:"chromosome"`
+			Allele  string `json:"allele"`
+			Coord   *int64 `json:"coordinate"`
+		}
+		body, _ := ioutil.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &params); err != nil {
+			return nil, fmt.Errorf("decoding request body: %v", err)
+		}
+		return &variants.Query{
+			RefName: params.RefName,
+			Allele:  params.Allele,
+			Coord:   params.Coord,
+		}, nil
+	default:
+		return nil, errors.New(fmt.Sprintf("HTTP method %s not supported", r.Method))
 	}
-	query.Coord = coord
-
-	return &query, nil
 }
 
 func getFormValueInt(r *http.Request, key string) (*int64, error) {
