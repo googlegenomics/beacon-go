@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/googlegenomics/beacon-go/internal/variants"
 	"google.golang.org/appengine"
@@ -46,8 +47,8 @@ type Server struct {
 
 // Export registers the beacon API endpoint with mux.
 func (server *Server) Export(mux *http.ServeMux) {
-	mux.Handle("/", forwardOrigin(server.About))
-	mux.Handle("/query", forwardOrigin(server.Query))
+	mux.Handle("/", &forwardOrigin{server.About, []string{"GET"}})
+	mux.Handle("/query", &forwardOrigin{server.Query, []string{"GET", "POST"}})
 }
 
 // About retrieves all the necessary information on the beacon and the API.
@@ -146,11 +147,19 @@ func writeResponse(w http.ResponseWriter, exists bool) {
 	enc.Encode(resp)
 }
 
-type forwardOrigin func(w http.ResponseWriter, req *http.Request)
+type forwardOrigin struct {
+	handler func(w http.ResponseWriter, req *http.Request)
+	methods []string
+}
 
-func (f forwardOrigin) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (f *forwardOrigin) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if origin := req.Header.Get("Origin"); origin != "" {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
+		if req.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Methods", strings.Join(f.methods, ","))
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization")
+			return
+		}
 	}
-	f(w, req)
+	f.handler(w, req)
 }
