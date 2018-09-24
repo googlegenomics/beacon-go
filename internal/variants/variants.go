@@ -127,12 +127,12 @@ func (q *Query) whereClause() string {
 func (q *Query) bqCoordinatesToWhereClause(add func(format string, args ...interface{})) {
 	if q.Start != nil {
 		if q.End != nil {
-			add("v.start = %d AND %d = v.end", *q.Start, *q.End)
+			add("v.start_position = %d AND %d = v.end_position", *q.Start, *q.End)
 		} else {
-			add("v.start = %d", *q.Start)
+			add("v.start_position = %d", *q.Start)
 		}
 	}
 	if q.StartMin != nil && q.StartMax != nil && q.EndMin != nil && q.EndMax != nil {
-		add("%d <= v.start AND v.start <= %d AND %d <= v.end AND v.end <= %d", *q.StartMin, *q.StartMax, *q.EndMin, *q.EndMax)
+		add("%d <= v.start_position AND v.start_position <= %d AND %d <= v.end_position AND v.end_position <= %d", *q.StartMin, *q.StartMax, *q.EndMin, *q.EndMax)
 	}
 }
