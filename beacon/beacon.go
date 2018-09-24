@@ -86,7 +86,6 @@ func (api *Server) Query(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseInput(r *http.Request) (*variants.Query, error) {
-
 	switch r.Method {
 	case "GET":
 		var query variants.Query
@@ -103,7 +102,7 @@ func parseInput(r *http.Request) (*variants.Query, error) {
 			Start    *int64 `json:"start"`
 			End      *int64 `json:"end"`
 			StartMin *int64 `json:"startMin"`
-			StartMax *int64 ` json:"startMax"`
+			StartMax *int64 `json:"startMax"`
 			EndMin   *int64 `json:"endMin"`
 			EndMax   *int64 `json:"endMax"`
 		}
@@ -128,41 +127,22 @@ func parseInput(r *http.Request) (*variants.Query, error) {
 }
 
 func parseFormCoordinates(r *http.Request, params *variants.Query) error {
-	start, err := getFormValueInt(r, "start")
-	if err != nil {
-		return fmt.Errorf("parsing start: %v", err)
+	fields := map[string]**int64{
+		"start":    &params.Start,
+		"end":      &params.End,
+		"startMin": &params.StartMin,
+		"startMax": &params.StartMax,
+		"endMin":   &params.EndMin,
+		"endMax":   &params.EndMax,
 	}
-	params.Start = start
 
-	end, err := getFormValueInt(r, "end")
-	if err != nil {
-		return fmt.Errorf("parsing end: %v", err)
+	for name, field := range fields {
+		v, err := getFormValueInt(r, name)
+		if err != nil {
+			return fmt.Errorf("parsing %s: %v", name, err)
+		}
+		*field = v
 	}
-	params.End = end
-
-	startMin, err := getFormValueInt(r, "startMin")
-	if err != nil {
-		return fmt.Errorf("parsing startMin: %v", err)
-	}
-	params.StartMin = startMin
-
-	startMax, err := getFormValueInt(r, "startMax")
-	if err != nil {
-		return fmt.Errorf("parsing startMax: %v", err)
-	}
-	params.StartMax = startMax
-
-	endMin, err := getFormValueInt(r, "endMin")
-	if err != nil {
-		return fmt.Errorf("parsing endMin: %v", err)
-	}
-	params.EndMin = endMin
-
-	endMax, err := getFormValueInt(r, "endMax")
-	if err != nil {
-		return fmt.Errorf("parsing endMax: %v", err)
-	}
-	params.EndMax = endMax
 	return nil
 }
 

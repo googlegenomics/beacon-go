@@ -96,13 +96,13 @@ func (q *Query) validateCoordinates() error {
 		imprecisePosition = true
 	}
 
-	if precisePosition && imprecisePosition {
+	if !precisePosition && !imprecisePosition {
 		return errors.New("please query either precise or imprecise position")
 	}
 	if precisePosition || imprecisePosition {
 		return nil
 	}
-	if q.Start != nil && q.End != nil || q.StartMin != nil || q.StartMax != nil || q.EndMin != nil || q.EndMax != nil {
+	if q.Start != nil || q.End != nil || q.StartMin != nil || q.StartMax != nil || q.EndMin != nil || q.EndMax != nil {
 		return errors.New("restrictions not met for provided coordinates")
 	}
 	return nil
@@ -113,26 +113,32 @@ func (q *Query) whereClause() string {
 	add := func(format string, args ...interface{}) {
 		clauses = append(clauses, fmt.Sprintf(format, args...))
 	}
-	simpleClause := func(dbColumn, value string) {
+	stringClause := func(dbColumn, value string) {
 		if dbColumn != "" && value != "" {
 			add("%s='%s'", dbColumn, value)
 		}
 	}
-	simpleClause("reference_name", q.RefName)
-	simpleClause("reference_bases", q.Allele)
-	q.bqCoordinatesToWhereClause(add)
-	return strings.Join(clauses, " AND ")
-}
-
-func (q *Query) bqCoordinatesToWhereClause(add func(format string, args ...interface{})) {
-	if q.Start != nil {
-		if q.End != nil {
-			add("v.start_position = %d AND %d = v.end_position", *q.Start, *q.End)
-		} else {
-			add("v.start_position = %d", *q.Start)
+	intClause := func(dbColumn string, value *int64) {
+		if dbColumn != "" && value != nil {
+			add("%s=%d", dbColumn, value)
 		}
 	}
-	if q.StartMin != nil && q.StartMax != nil && q.EndMin != nil && q.EndMax != nil {
-		add("%d <= v.start_position AND v.start_position <= %d AND %d <= v.end_position AND v.end_position <= %d", *q.StartMin, *q.StartMax, *q.EndMin, *q.EndMax)
+	stringClause("reference_name", q.RefName)
+	stringClause("reference_bases", q.Allele)
+	intClause("start_position", q.Start)
+	intClause("end_position", q.End)
+
+	if q.StartMin != nil {
+		add("%d <= v.start_position", q.StartMin)
 	}
+	if q.StartMax != nil {
+		add("%v.start_position <= %d", q.StartMax)
+	}
+	if q.EndMin != nil {
+		add("%d <= v.end_position", q.EndMin)
+	}
+	if q.EndMax != nil {
+		add("v.end_position <= %d", q.StartMax)
+	}
+	return strings.Join(clauses, " AND ")
 }
