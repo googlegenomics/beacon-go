@@ -96,7 +96,7 @@ func (q *Query) validateCoordinates() error {
 		imprecisePosition = true
 	}
 
-	if !precisePosition && !imprecisePosition {
+	if precisePosition && imprecisePosition {
 		return errors.New("please query either precise or imprecise position")
 	}
 	if precisePosition || imprecisePosition {
