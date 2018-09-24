@@ -113,20 +113,22 @@ func (q *Query) whereClause() string {
 	add := func(format string, args ...interface{}) {
 		clauses = append(clauses, fmt.Sprintf(format, args...))
 	}
-	stringClause := func(dbColumn, value string) {
-		if dbColumn != "" && value != "" {
-			add("%s='%s'", dbColumn, value)
+	simpleClause := func(dbColumn, value interface{}) {
+		switch value := value.(type) {
+		case string:
+			if value != "" {
+				add("%s='%s'", dbColumn, value)
+			}
+		case *int64:
+			if value != nil {
+				add("%s=%d", dbColumn, value)
+			}
 		}
 	}
-	intClause := func(dbColumn string, value *int64) {
-		if dbColumn != "" && value != nil {
-			add("%s=%d", dbColumn, value)
-		}
-	}
-	stringClause("reference_name", q.RefName)
-	stringClause("reference_bases", q.Allele)
-	intClause("start_position", q.Start)
-	intClause("end_position", q.End)
+	simpleClause("reference_name", q.RefName)
+	simpleClause("reference_bases", q.Allele)
+	simpleClause("start_position", q.Start)
+	simpleClause("end_position", q.End)
 
 	if q.StartMin != nil {
 		add("%d <= v.start_position", q.StartMin)
