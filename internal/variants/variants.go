@@ -102,12 +102,10 @@ func (q *Query) validateCoordinates() error {
 
 	anyPrecise := q.Start != nil || q.End != nil
 	anyImprecise := q.StartMin != nil || q.StartMax != nil || q.EndMin != nil || q.EndMax != nil
-	if !anyPrecise && !anyImprecise ||
-		precisePosition && !anyImprecise ||
-		imprecisePosition && !anyPrecise {
-		return nil
+	if anyPrecise && !precisePosition || anyImprecise && !imprecisePosition {
+		return errors.New("an unusable combination of coordinate parameters was specified")
 	}
-	return errors.New("a bad combination of coordinate parameters was specified, either precise or imprecise positions may be specified")
+	return nil
 }
 
 func (q *Query) whereClause() string {
