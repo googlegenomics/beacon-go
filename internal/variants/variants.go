@@ -97,15 +97,17 @@ func (q *Query) validateCoordinates() error {
 	}
 
 	if precisePosition && imprecisePosition {
-		return errors.New("please query either precise or imprecise position")
+		return errors.New("either precise or imprecise positions may be specified, not both")
 	}
-	if precisePosition || imprecisePosition {
+
+	anyPrecise := q.Start != nil || q.End != nil
+	anyImprecise := q.StartMin != nil || q.StartMax != nil || q.EndMin != nil || q.EndMax != nil
+	if !anyPrecise && !anyImprecise ||
+		precisePosition && !anyImprecise ||
+		imprecisePosition && !anyPrecise {
 		return nil
 	}
-	if q.Start != nil || q.End != nil || q.StartMin != nil || q.StartMax != nil || q.EndMin != nil || q.EndMax != nil {
-		return errors.New("restrictions not met for provided coordinates")
-	}
-	return nil
+	return errors.New("a bad combination of coordinate parameters was specified, either precise or imprecise positions may be specified")
 }
 
 func (q *Query) whereClause() string {
