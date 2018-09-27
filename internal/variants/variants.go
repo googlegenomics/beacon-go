@@ -49,8 +49,7 @@ func (q *Query) Execute(ctx context.Context, projectID, tableID string) (bool, e
 	query := fmt.Sprintf(`
 		SELECT count(v.reference_name) as count
 		FROM %s as v
-		WHERE %s
-		LIMIT 1`,
+		WHERE %s`,
 		fmt.Sprintf("`%s`", tableID),
 		q.whereClause(),
 	)
