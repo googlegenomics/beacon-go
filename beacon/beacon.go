@@ -176,7 +176,7 @@ func NewClientFromBearerToken(req *http.Request, projectID string) (*bigquery.Cl
 
 	fields := strings.Split(authorization, " ")
 	if len(fields) != 2 || fields[0] != "Bearer" {
-		return nil, errors.New(fmt.Sprintf("missing or invalid authentication token: |%v|", authorization))
+		return nil, errors.New("missing or invalid authentication token")
 	}
 
 	token := oauth2.Token{
