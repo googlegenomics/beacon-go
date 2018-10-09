@@ -35,7 +35,7 @@ type Query struct {
 }
 
 // Execute queries the allele database with the Query parameters.
-func (q *Query) Execute(ctx context.Context, projectID, tableID string) (bool, error) {
+func (q *Query) Execute(ctx context.Context, client *bigquery.Client, tableID string) (bool, error) {
 	query := fmt.Sprintf(`
 		SELECT count(v.reference_name) as count
 		FROM %s as v
@@ -45,10 +45,6 @@ func (q *Query) Execute(ctx context.Context, projectID, tableID string) (bool, e
 		q.whereClause(),
 	)
 
-	client, err := bigquery.NewClient(ctx, projectID)
-	if err != nil {
-		return false, fmt.Errorf("creating bigquery client: %v", err)
-	}
 	it, err := client.Query(query).Read(ctx)
 	if err != nil {
 		return false, fmt.Errorf("querying database: %v", err)

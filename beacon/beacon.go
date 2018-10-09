@@ -24,9 +24,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/googlegenomics/beacon-go/internal/variants"
-	"google.golang.org/appengine"
+	"golang.org/x/oauth2"
+	"google.golang.org/api/option"
 )
 
 const beaconAPIVersion = "v0.0.1"
@@ -35,6 +38,10 @@ var (
 	aboutTemplate = template.Must(template.ParseFiles("about.xml"))
 )
 
+// NewBigQueryClientFunc is the type of function that constructs the appropriate
+// bigquery.Client to satisfy the incoming request.
+type NewBigQueryClientFunc func(*http.Request, string) (*bigquery.Client, error)
+
 // Server provides handlers for Beacon API requests.
 type Server struct {
 	// ProjectID is the GCloud project ID.
@@ -42,6 +49,8 @@ type Server struct {
 	// TableID is the ID of the allele BigQuery table to query.
 	// Must be provided in the following format: bigquery-project.dataset.table.
 	TableID string
+	// NewBigQueryClient determine which BigQuery client to use.
+	NewBigQueryClient NewBigQueryClientFunc
 }
 
 // Export registers the beacon API endpoint with mux.
@@ -76,8 +85,13 @@ func (api *Server) Query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := appengine.NewContext(r)
-	exists, err := query.Execute(ctx, api.ProjectID, api.TableID)
+	client, err := api.NewBigQueryClient(r, api.ProjectID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("creating bigquery client: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	exists, err := query.Execute(r.Context(), client, api.TableID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("computing result: %v", err), http.StatusInternalServerError)
 		return
@@ -153,4 +167,27 @@ func (f forwardOrigin) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 	}
 	f(w, req)
+}
+
+// NewClientFromBearerToken constructs a bigquery client that uses the OAuth2
+// bearer token found in req to make storage requests.
+func NewClientFromBearerToken(req *http.Request, projectID string) (*bigquery.Client, error) {
+	authorization := req.Header.Get("Authorization")
+
+	fields := strings.Split(authorization, " ")
+	if len(fields) != 2 || fields[0] != "Bearer" {
+		return nil, errors.New(fmt.Sprintf("missing or invalid authentication token: |%v|", authorization))
+	}
+
+	token := oauth2.Token{
+		TokenType:   fields[0],
+		AccessToken: fields[1],
+	}
+
+	client, err := bigquery.NewClient(req.Context(), projectID, option.WithTokenSource(oauth2.StaticTokenSource(&token)))
+	if err != nil {
+		return nil, fmt.Errorf("creating bigquery client: %v", err)
+	}
+
+	return client, nil
 }
