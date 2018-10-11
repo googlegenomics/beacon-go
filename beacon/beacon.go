@@ -50,9 +50,9 @@ const (
 	// ServiceAuth will configure the server to use its service account credentials to access
 	// the BigQuery datasets.
 	ServiceAuth AuthenticationMode = iota
-	// RequestAuth will configure the server to use the authentication header provided in the
+	// UserAuth will configure the server to use the authentication header provided in the
 	// request to access the BigQuery datasets.
-	RequestAuth
+	UserAuth
 )
 
 // Server provides handlers for Beacon API requests.
@@ -186,7 +186,7 @@ func (api *Server) newBQClient(req *http.Request, projectID string) (*bigquery.C
 	switch api.AuthMode {
 	case ServiceAuth:
 		return bigquery.NewClient(appengine.NewContext(req), projectID)
-	case RequestAuth:
+	case UserAuth:
 		return newClientFromBearerToken(req.WithContext(appengine.NewContext(req)), projectID)
 	default:
 		panic(fmt.Sprintf("invalid value %d for server authentication mode", api.AuthMode))

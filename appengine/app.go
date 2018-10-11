@@ -38,9 +38,9 @@ func authMode() beacon.AuthenticationMode {
 	switch os.Getenv(mode) {
 	case "", "service":
 		return beacon.ServiceAuth
-	case "request":
-		return beacon.RequestAuth
+	case "user":
+		return beacon.UserAuth
 	default:
-		panic(fmt.Sprintf("invalid value for %s, specify service or request", mode))
+		panic(fmt.Sprintf("invalid value for %s, specify service or user", mode))
 	}
 }
