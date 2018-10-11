@@ -39,10 +39,6 @@ var (
 	aboutTemplate = template.Must(template.ParseFiles("about.xml"))
 )
 
-// NewBigQueryClientFunc is the type of function that constructs the appropriate
-// bigquery.Client to satisfy the incoming request.
-type NewBigQueryClientFunc func(*http.Request, string) (*bigquery.Client, error)
-
 // AuthenticationMode defines what authentication credentials the server uses to connect to BigQuery.
 type AuthenticationMode uint
 
