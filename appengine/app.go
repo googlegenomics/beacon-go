@@ -5,9 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"cloud.google.com/go/bigquery"
 	"github.com/googlegenomics/beacon-go/beacon"
-	"google.golang.org/appengine"
 )
 
 const (
@@ -18,9 +16,9 @@ const (
 
 func init() {
 	server := beacon.Server{
-		ProjectID:         os.Getenv(project),
-		TableID:           os.Getenv(bqTable),
-		NewBigQueryClient: newBQClientFunc(),
+		ProjectID: os.Getenv(project),
+		TableID:   os.Getenv(bqTable),
+		AuthMode:  authMode(),
 	}
 
 	if server.ProjectID == "" {
@@ -36,25 +34,13 @@ func init() {
 	http.HandleFunc("/", mux.ServeHTTP)
 }
 
-func newBQClientFunc() beacon.NewBigQueryClientFunc {
+func authMode() beacon.AuthenticationMode {
 	switch os.Getenv(mode) {
-	case "auth":
-		return newAppEngineClient
-	case "", "open":
-		return newUnAuthClient
+	case "", "service":
+		return beacon.ServiceAuth
+	case "request":
+		return beacon.RequestAuth
 	default:
-		panic(fmt.Sprintf("invalid value for %s, specify auth or open", mode))
+		panic(fmt.Sprintf("invalid value for %s, specify service or request", mode))
 	}
-}
-
-func newAppEngineClient(req *http.Request, projectID string) (*bigquery.Client, error) {
-	return beacon.NewClientFromBearerToken(req.WithContext(appengine.NewContext(req)), projectID)
-}
-
-func newUnAuthClient(req *http.Request, projectID string) (*bigquery.Client, error) {
-	client, err := bigquery.NewClient(appengine.NewContext(req), projectID)
-	if err != nil {
-		return nil, fmt.Errorf("creating bigquery client: %v", err)
-	}
-	return client, nil
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/googlegenomics/beacon-go/internal/variants"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/option"
+	"google.golang.org/appengine"
 )
 
 const beaconAPIVersion = "v0.0.1"
@@ -42,6 +43,18 @@ var (
 // bigquery.Client to satisfy the incoming request.
 type NewBigQueryClientFunc func(*http.Request, string) (*bigquery.Client, error)
 
+// AuthenticationMode defines what authentication credentials the server uses to connect to BigQuery.
+type AuthenticationMode uint
+
+const (
+	// ServiceAuth will configure the server to use its service account credentials to access
+	// the BigQuery datasets.
+	ServiceAuth AuthenticationMode = iota
+	// RequestAuth will configure the server to use the authentication header provided in the
+	// request to access the BigQuery datasets.
+	RequestAuth
+)
+
 // Server provides handlers for Beacon API requests.
 type Server struct {
 	// ProjectID is the GCloud project ID.
@@ -49,8 +62,8 @@ type Server struct {
 	// TableID is the ID of the allele BigQuery table to query.
 	// Must be provided in the following format: bigquery-project.dataset.table.
 	TableID string
-	// NewBigQueryClient determine which BigQuery client to use.
-	NewBigQueryClient NewBigQueryClientFunc
+	// AuthMode determines the authentication provider for the  BigQuery client.
+	AuthMode AuthenticationMode
 }
 
 // Export registers the beacon API endpoint with mux.
@@ -85,7 +98,7 @@ func (api *Server) Query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := api.NewBigQueryClient(r, api.ProjectID)
+	client, err := api.newBQClient(r, api.ProjectID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("creating bigquery client: %v", err), http.StatusBadRequest)
 		return
@@ -169,9 +182,18 @@ func (f forwardOrigin) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	f(w, req)
 }
 
-// NewClientFromBearerToken constructs a bigquery client that uses the OAuth2
-// bearer token found in req to make storage requests.
-func NewClientFromBearerToken(req *http.Request, projectID string) (*bigquery.Client, error) {
+func (api *Server) newBQClient(req *http.Request, projectID string) (*bigquery.Client, error) {
+	switch api.AuthMode {
+	case ServiceAuth:
+		return bigquery.NewClient(appengine.NewContext(req), projectID)
+	case RequestAuth:
+		return newClientFromBearerToken(req.WithContext(appengine.NewContext(req)), projectID)
+	default:
+		panic(fmt.Sprintf("invalid value %d for server authentication mode", api.AuthMode))
+	}
+}
+
+func newClientFromBearerToken(req *http.Request, projectID string) (*bigquery.Client, error) {
 	authorization := req.Header.Get("Authorization")
 
 	fields := strings.Split(authorization, " ")

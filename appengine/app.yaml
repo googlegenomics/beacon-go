@@ -20,6 +20,6 @@ handlers:
   script: _go_app
 
 env_variables:
-#  BEACON_MODE: auth-or-open
+#  BEACON_AUTH_MODE: service-or-request
 #  GOOGLE_CLOUD_PROJECT: change-to-your-project-id
 #  GOOGLE_BIGQUERY_TABLE: bigqueryProject.dataset.variantsTable
