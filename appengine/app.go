@@ -9,16 +9,16 @@ import (
 )
 
 const (
-	project = "GOOGLE_CLOUD_PROJECT"
-	bqTable = "GOOGLE_BIGQUERY_TABLE"
-	mode    = "BEACON_AUTH_MODE"
+	project  = "GOOGLE_CLOUD_PROJECT"
+	bqTable  = "GOOGLE_BIGQUERY_TABLE"
+	authMode = "AUTHENTICATION_MODE"
 )
 
 func init() {
 	server := beacon.Server{
 		ProjectID: os.Getenv(project),
 		TableID:   os.Getenv(bqTable),
-		AuthMode:  authMode(),
+		AuthMode:  serverAuthMode(),
 	}
 
 	if server.ProjectID == "" {
@@ -34,13 +34,13 @@ func init() {
 	http.HandleFunc("/", mux.ServeHTTP)
 }
 
-func authMode() beacon.AuthenticationMode {
-	switch os.Getenv(mode) {
+func serverAuthMode() beacon.AuthenticationMode {
+	switch os.Getenv(authMode) {
 	case "", "service":
 		return beacon.ServiceAuth
 	case "user":
 		return beacon.UserAuth
 	default:
-		panic(fmt.Sprintf("invalid value for %s, specify service or user", mode))
+		panic(fmt.Sprintf("invalid value for %s, specify service or user", authMode))
 	}
 }

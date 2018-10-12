@@ -185,7 +185,7 @@ func (api *Server) newBQClient(req *http.Request, projectID string) (*bigquery.C
 	case UserAuth:
 		return newClientFromBearerToken(req.WithContext(appengine.NewContext(req)), projectID)
 	default:
-		panic(fmt.Sprintf("invalid value %d for server authentication mode", api.AuthMode))
+		return nil, fmt.Errorf("invalid value %d for server authentication mode", api.AuthMode)
 	}
 }
 
