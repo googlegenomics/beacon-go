@@ -20,9 +20,11 @@ handlers:
   script: _go_app
 
 env_variables:
-#  Uncomment the following line to use the appengine service account credentials.
+# Uncomment the following line to use the appengine service account credentials
+# to access the datasets.
 #  AUTHENTICATION_MODE: service
-#  Uncomment the following line to use the user credentials specified in the request.
+# Uncomment the following line to use the user credentials specified in the request to
+# access the datasets.
 #  AUTHENTICATION_MODE: user
 #
 #  GOOGLE_CLOUD_PROJECT: change-to-your-project-id
