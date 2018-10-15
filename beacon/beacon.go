@@ -39,15 +39,16 @@ var (
 	aboutTemplate = template.Must(template.ParseFiles("about.xml"))
 )
 
-// AuthenticationMode defines what authentication credentials the server uses to connect to BigQuery.
+// AuthenticationMode defines what authentication credentials the server uses to connect to
+// BigQuery.
 type AuthenticationMode uint
 
 const (
-	// ServiceAuth will configure the server to use its service account credentials to access
-	// the BigQuery datasets.
+	// ServiceAuth will configure the server to use its service account credentials to access the
+	// BigQuery datasets.
 	ServiceAuth AuthenticationMode = iota
-	// UserAuth will configure the server to use the authentication header provided in the
-	// request to access the BigQuery datasets.
+	// UserAuth will configure the server to use the authentication header provided in the request to
+	// access the BigQuery datasets.
 	UserAuth
 )
 
@@ -58,7 +59,7 @@ type Server struct {
 	// TableID is the ID of the allele BigQuery table to query.
 	// Must be provided in the following format: bigquery-project.dataset.table.
 	TableID string
-	// AuthMode determines the authentication provider for the  BigQuery client.
+	// AuthMode determines the authentication provider for the BigQuery client.
 	AuthMode AuthenticationMode
 }
 
