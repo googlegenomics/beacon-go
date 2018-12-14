@@ -87,24 +87,14 @@ func (q *Query) ValidateInput() error {
 }
 
 func (q *Query) validateCoordinates() error {
-	var precisePosition, imprecisePosition bool
-	if q.Start != nil && (q.End != nil || q.Allele != "") {
-		precisePosition = true
+	if q.Start != nil && (q.End != nil || q.Allele != "") &&
+		q.StartMin == nil && q.StartMax == nil && q.EndMin == nil && q.EndMax == nil {
+		return nil
+	} else if q.StartMin != nil && q.StartMax != nil && q.EndMin != nil && q.EndMax != nil &&
+		q.Start == nil && q.End == nil {
+		return nil
 	}
-	if q.StartMin != nil && q.StartMax != nil && q.EndMin != nil && q.EndMax != nil {
-		imprecisePosition = true
-	}
-
-	if precisePosition && imprecisePosition {
-		return errors.New("either precise or imprecise positions may be specified, not both")
-	}
-
-	anyPrecise := q.Start != nil || q.End != nil
-	anyImprecise := q.StartMin != nil || q.StartMax != nil || q.EndMin != nil || q.EndMax != nil
-	if anyPrecise && !precisePosition || anyImprecise && !imprecisePosition {
-		return errors.New("an unusable combination of coordinate parameters was specified")
-	}
-	return nil
+	return errors.New("an unusable combination of coordinate parameters was specified")
 }
 
 func (q *Query) whereClause() string {
